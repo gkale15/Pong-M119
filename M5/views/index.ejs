@@ -32,16 +32,28 @@
                 UP: 1,
                 DOWN: 2,
                 LEFT: 3,
-                RIGHT: 4
+                RIGHT: 4,
+                STRAIGHT_UP: 5,
+                STRAIGHT_DOWN: 6,
+                STOP: 7
             };
 
-            function transferFunction(sensorValueX, sensorValueY, sensorValueZ ) {
-                if (sensorValueY < -0.1 ) {
-                    return DIRECTION.DOWN
+            function transferFunction(sensorValueAX, sensorValueAY, sensorValueAZ ) {
+                if (sensorValueGY < -200 && sensorValueGX < -100 ) {
+                    return DIRECTION.STRAIGHT_DOWN
                 }
-                if (sensorValueY > 0.1 ) {
+                if (sensorValueGY > 200 && sensorValueGX > 100 ) {
+                    return DIRECTION.STRAIGHT_UP
+                }
+
+                if (sensorValueAY < -0.35) {
                     return DIRECTION.UP
                 }
+
+                if( sensorValueAY > 0.25 ) {
+                    return DIRECTION.DOWN
+                }
+
                 return DIRECTION.IDLE
             }
 
@@ -74,7 +86,9 @@
                         score: 0,
                         move: DIRECTION.IDLE,
                         speed: 10,
-                        wins: 0
+                        wins: 0,
+                        moveLock: false,
+                        idle_count: 0
                     };
                 }
             };
@@ -99,6 +113,7 @@
                     this.turn = this.paddle;
                     this.timer = this.round = 0;
                     this.color = '#2c3e50';
+                    this.cpu_game = true;
 
                     Pong.menu();
                     Pong.listen();
@@ -153,7 +168,7 @@
                     this.context.fillStyle = '#ffffff';
 
                     // Draw the 'press any key to begin' text
-                    this.context.fillText('Press any key to begin',
+                    this.context.fillText('Press C to play CPU, F to play friend',
                         this.canvas.width / 2,
                         this.canvas.height / 2 + 15
                     );
@@ -169,8 +184,12 @@
                         if (this.ball.y >= this.canvas.height - this.ball.height) this.ball.moveY = DIRECTION.UP;
 
                         // Move player if they player.move value was updated by a keyboard event
-                        if (this.player.move === DIRECTION.UP) this.player.y -= this.player.speed;
-                        else if (this.player.move === DIRECTION.DOWN) this.player.y += this.player.speed;
+                        if (this.player.move === DIRECTION.UP || this.player.move === DIRECTION.STRAIGHT_UP) this.player.y -= this.player.speed;
+                        else if (this.player.move === DIRECTION.DOWN || this.player.move === DIRECTION.STRAIGHT_DOWN) this.player.y += this.player.speed;
+
+                        //update paddle in the case we have a 2 player game
+                        if (this.paddle.move === DIRECTION.UP) this.paddle.y -= this.paddle.speed;
+                        else if (this.paddle.move === DIRECTION.DOWN) this.paddle.y += this.paddle.speed;
 
                         // On new serve (start of each turn) move the ball to the correct side
                         // and randomize the direction to add some challenge.
@@ -191,19 +210,24 @@
                         if (this.ball.moveX === DIRECTION.LEFT) this.ball.x -= this.ball.speed;
                         else if (this.ball.moveX === DIRECTION.RIGHT) this.ball.x += this.ball.speed;
 
-                        // Handle paddle (AI) UP and DOWN movement
-                        if (this.paddle.y > this.ball.y - (this.paddle.height / 2)) {
-                            if (this.ball.moveX === DIRECTION.RIGHT) this.paddle.y -= this.paddle.speed / 1.5;
-                            else this.paddle.y -= this.paddle.speed / 4;
-                        }
-                        if (this.paddle.y < this.ball.y - (this.paddle.height / 2)) {
-                            if (this.ball.moveX === DIRECTION.RIGHT) this.paddle.y += this.paddle.speed / 1.5;
-                            else this.paddle.y += this.paddle.speed / 4;
+
+                        if ( this.cpu_game ) {
+                            // Handle AI up/down movements 
+                            if (this.paddle.y > this.ball.y - (this.paddle.height / 2)) {
+                                if (this.ball.moveX === DIRECTION.RIGHT) this.paddle.y -= this.paddle.speed / 1.5;
+                                else this.paddle.y -= this.paddle.speed / 4;
+                            }
+                            if (this.paddle.y < this.ball.y - (this.paddle.height / 2)) {
+                                if (this.ball.moveX === DIRECTION.RIGHT) this.paddle.y += this.paddle.speed / 1.5;
+                                else this.paddle.y += this.paddle.speed / 4;
+                            }
+    
                         }
 
                         // Handle paddle (AI) wall collision
                         if (this.paddle.y >= this.canvas.height - this.paddle.height) this.paddle.y = this.canvas.height - this.paddle.height;
                         else if (this.paddle.y <= 0) this.paddle.y = 0;
+                        
 
                         // Handle Player-Ball collisions
                         if (this.ball.x - this.ball.width <= this.player.x && this.ball.x >= this.player.x - this.player.width) {
@@ -355,21 +379,40 @@
 
                 listen: function () {
                     document.addEventListener('keydown', function (key) {
-                        // Handle the 'Press any key to begin' function and start the game.
-                        if (Pong.running === false) {
+                        // Handle the cpu start function and start the game.
+                        if (Pong.running === false && key.keyCode === 67) {
+                            Pong.cpu_game = true;
                             Pong.running = true;
                             window.requestAnimationFrame(Pong.loop);
                         }
 
-                        // Handle up arrow and w key events
-                        if (key.keyCode === 38 || key.keyCode === 87) Pong.player.move = DIRECTION.UP;
+                        //Handle the 2 player start and start the game
+                        if (Pong.running === false && key.keyCode === 70) {
+                            Pong.cpu_game = false;
+                            Pong.running = true;
+                            window.requestAnimationFrame(Pong.loop);
+                        }
 
-                        // Handle down arrow and s key events
-                        if (key.keyCode === 40 || key.keyCode === 83) Pong.player.move = DIRECTION.DOWN;
+                        if( !Pong.cpu_game ) {
+                            // Handle up arrow and w key events
+                            if (key.keyCode === 38 || key.keyCode === 87) Pong.paddle.move = DIRECTION.UP;
+
+                            // Handle down arrow and s key events
+                            if (key.keyCode === 40 || key.keyCode === 83) Pong.paddle.move = DIRECTION.DOWN;
+                        }
+
+                        if( Pong.cpu_game ) {
+                            // Handle up arrow and w key events
+                            if (key.keyCode === 38 || key.keyCode === 87) Pong.player.move = DIRECTION.UP;
+
+                            // Handle down arrow and s key events
+                            if (key.keyCode === 40 || key.keyCode === 83) Pong.player.move = DIRECTION.DOWN;
+                        }
+                        
                     });
 
                     // Stop the player from moving when there are no keys being pressed.
-                    document.addEventListener('keyup', function (key) { Pong.player.move = DIRECTION.IDLE; });
+                    document.addEventListener('keyup', function (key) { Pong.paddle.move = DIRECTION.IDLE; });
                 },
 
                 // Reset the ball location, the player turns and set a delay before the next round begins.
@@ -405,10 +448,32 @@
             xmlhttp.onreadystatechange = function () {
                 if (xmlhttp.readyState == 4 && xmlhttp.status == 200) {
                     let responseText = xmlhttp.responseText
-                    sensorValueX = parseFloat(JSON.parse(responseText).aX)
-                    sensorValueY = parseFloat(JSON.parse(responseText).aY)
-                    sensorValueZ = parseFloat(JSON.parse(responseText).aZ)
-                    Pong.player.move = transferFunction(sensorValueX,sensorValueY,sensorValueZ)
+                    sensorValueAX = parseFloat(JSON.parse(responseText).aX)
+                    sensorValueAY = parseFloat(JSON.parse(responseText).aY)
+                    sensorValueAZ = parseFloat(JSON.parse(responseText).aZ)
+                    sensorValueGX = parseFloat(JSON.parse(responseText).gX)
+                    sensorValueGY = parseFloat(JSON.parse(responseText).gY)
+                    sensorValueGZ = parseFloat(JSON.parse(responseText).gZ)
+                    
+                    sensedMove = transferFunction(sensorValueAX,sensorValueAY,sensorValueAZ)
+                    if ( sensedMove === DIRECTION.STRAIGHT_DOWN || sensedMove === DIRECTION.STRAIGHT_UP ) {
+                        Pong.player.moveLock = true
+                        Pong.player.move = sensedMove
+                    }
+
+                    if ( sensedMove === DIRECTION.IDLE ) {
+                        Pong.player.idle_count += 1
+                    }
+                        
+                    if (Pong.player.idle_count >= 3 ) {
+                        Pong.player.moveLock = false
+                        Pong.player.idle_count = 0
+                        Pong.player.move = DIRECTION.IDLE
+                    }
+
+
+
+                    if ( !Pong.player.moveLock ) { Pong.player.move = sensedMove }
                 }
             }
             // periodically grab data
